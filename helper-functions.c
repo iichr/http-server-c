@@ -1,27 +1,10 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <errno.h>
-
-#define BUFSIZE 4096
-#define MAXLINE 4096
-#define MAXBUF  4096
-
-typedef struct {
-	int fd;		/* descriptor for this internal buf */
-	int unread;		/* unread bytes in internal buf */
-	char *p_buf;	/* next unread byte in internal buf */
-	char ibuf[BUFSIZE];	/* internal read buffer */
-} fd_internalbuf;
-
+#include "helper-functions.h"
 
 /**
  * Displays error messages from system calls.
  * @param msg The message to display
  */
-void error(char *msg)
-{
+void error(char *msg) {
 	fprintf(stderr, "%s: %s\n", msg, strerror(errno));
 	exit(0);
 }
@@ -62,8 +45,7 @@ ssize_t read_n_bytes(int fd, void *buf, size_t n) {
  * @param  buf a pointer to a buffer
  * @param  n   bytes to write
  */
-void write_n_bytes(int fd, void *buf, size_t n) 
-{
+void write_n_bytes(int fd, void *buf, size_t n) {
 	size_t bytesleft = n;
 	ssize_t byteswritten;
 	char *p_buf = buf;
@@ -91,8 +73,7 @@ void write_n_bytes(int fd, void *buf, size_t n)
  * mapped to a file descriptor 
  * @param fd a file descriptor
  */
-void init_internalbuf(fd_internalbuf *rp, int fd) 
-{
+void init_internalbuf(fd_internalbuf *rp, int fd) {
 	rp->fd = fd;  
 	rp->unread = 0;  
 	rp->p_buf = rp->ibuf; /* point to first element of buffer */
@@ -117,7 +98,6 @@ void init_internalbuf(fd_internalbuf *rp, int fd)
  * @return     [description]
  */
 static ssize_t readb(fd_internalbuf *rp, char *buf, size_t n) {
-
 	int count = n;
 
 	/* if buffer is empty */
@@ -157,8 +137,7 @@ static ssize_t readb(fd_internalbuf *rp, char *buf, size_t n) {
  * @param  maxlen how many bytes is the maximum limit to read from a line
  * @return        number of bytes read
  */
-ssize_t readline(fd_internalbuf *rp, void *buf, size_t maxlen) 
-{
+ssize_t readline(fd_internalbuf *rp, void *buf, size_t maxlen) {
 	int n;			/* number of bytes read in total */
 	int bytesread;	/* bytes read thus far */
 	char c;			/* keeps track of current buffer pointer */
@@ -193,8 +172,7 @@ ssize_t readline(fd_internalbuf *rp, void *buf, size_t maxlen)
  * @param  n   [description]
  * @return     [description]
  */
-ssize_t read_n_bytes_buffered(fd_internalbuf *rp, void *buf, size_t n) 
-{
+ssize_t read_n_bytes_buffered(fd_internalbuf *rp, void *buf, size_t n) {
 	size_t bytesleft = n;
 	ssize_t bytesread;
 	char *bufp = buf;
@@ -233,8 +211,7 @@ ssize_t read_n_bytes_buffered(fd_internalbuf *rp, void *buf, size_t n)
  * Read request headers and print them
  * @param rp a struct with an internal buffer to read from
  */
-void read_request_headers(fd_internalbuf *rp)
-{
+void read_request_headers(fd_internalbuf *rp) {
 	char buf[MAXLINE];
 	// first line
 	readline(rp, buf, MAXLINE);
@@ -276,8 +253,7 @@ void parse_uri(char *uri, char *filename) {
  * @param filename the filename from which to extract the extension	
  * @param filetype where the filetype is going to be stored
  */
-void getfiletype(char *filename, char *filetype) 
-{
+void getfiletype(char *filename, char *filetype) {
 	if (strstr(filename, ".html"))
 		strcpy(filetype, "text/html");
 
@@ -303,8 +279,7 @@ void getfiletype(char *filename, char *filetype)
  * @param shortmsg   HTTP error code message e.g Forbidden
  * @param longmsg    A more thorough explanation
  */
-void raise_http_err(int fd, char *err, char *error_code, char *shortmsg, char *longmsg) 
-{
+void raise_http_err(int fd, char *err, char *error_code, char *shortmsg, char *longmsg) {
 	char buf[MAXLINE];	/* store response header */
 	char body[MAXBUF];	/* store the response body */
 
