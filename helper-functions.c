@@ -9,9 +9,9 @@
 #define MAXBUF  4096
 
 typedef struct {
-	int fd;				/* descriptor for this internal buf */
-	int unread;			/* unread bytes in internal buf */
-	char *p_buf;		/* next unread byte in internal buf */
+	int fd;		/* descriptor for this internal buf */
+	int unread;		/* unread bytes in internal buf */
+	char *p_buf;	/* next unread byte in internal buf */
 	char ibuf[BUFSIZE];	/* internal read buffer */
 } fd_internalbuf;
 
@@ -61,7 +61,6 @@ ssize_t read_n_bytes(int fd, void *buf, size_t n) {
  * @param  fd  a file descriptor
  * @param  buf a pointer to a buffer
  * @param  n   bytes to write
- * @return     how many bytes were written
  */
 void write_n_bytes(int fd, void *buf, size_t n) 
 {
@@ -296,53 +295,6 @@ void getfiletype(char *filename, char *filetype)
 }  
 
 
-
-// Send an HTTP response with the body being the contents of a file
-// First, inspect suffix of file -> determine file type
-// Next, send response line and headers to client
-// terminate every header with \r\n per the standard
-// terminate headers section with \n
-// Next, send the response body by copying file contents to fd
-// p.961
-// TEST!
-void serve_static(int fd, char *filename, int filesize) {
-	FILE *srcfd;
-	char *srcp, filetype[MAXLINE], buf[MAXBUF];
- 
-	/* Send response headers to client */
-	getfiletype(filename, filetype);
-	sprintf(buf, "HTTP/1.1 200 OK\r\n");
-	sprintf(buf, "%sServer: CSERVER\r\n", buf);
-	sprintf(buf, "%sConnection: close\r\n", buf);
-	sprintf(buf, "%sContent-length: %d\r\n", buf, filesize);
-	sprintf(buf, "%sContent-type: %s\r\n\r\n", buf, filetype);
-	/* double empty line between response line and response header as per protocol */
-	write_n_bytes(fd, buf, strlen(buf));
-	printf("Response headers:\n");
-	printf("%s", buf);
-
-	/* Send response body to client */
-
-	// open filename and get its descriptor fd
-	srcfd = fopen(filename, "r");
-
-	// map requested file to virtual memory area, starting at address srcp
-	//srcp = Mmap(0, filesize, PROT_READ, MAP_PRIVATE, srcfd, 0);
-	//mmap args
-	//(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
-	//addr = starting address, length = length of mapping,
-	//prot = memory protection of the mapping (see open mode of file)
-	//flags, offset in fd = 0
-	// alternatively fread
-	fread(buf,1,MAXBUF,srcfd);
-
-	// close afterwards, no longer needed !!!!!
-	fclose(srcfd);         
-	// copy filsieze bytes starting from srcp to the descriptor fd
-	write_n_bytes(fd, srcp, filesize);
-}
-
-
 /**
  * Return a given error message with an error code to the client
  * @param fd         the file descriptor	
@@ -379,7 +331,40 @@ void raise_http_err(int fd, char *err, char *error_code, char *shortmsg, char *l
 }
 
 
+/**
+ * Send an HTTP response with the body being the contents of a file.
+ * 
+ * @param fd       the file descriptor to be written to
+ * @param filename 
+ * @param filesize 
+ */
+void serve_static(int fd, char *filename, int filesize) {
+	FILE *src;
+	char *p_src, filetype[MAXLINE], buf[MAXBUF];
+	int bytesread;
+ 
+	/* Send response line and headers to client */
+	getfiletype(filename, filetype);	/* determine file type */
+	sprintf(buf, "HTTP/1.1 200 OK\r\n");
+	sprintf(buf, "%sServer: CSERVER\r\n", buf);
+	sprintf(buf, "%sConnection: close\r\n", buf);
+	sprintf(buf, "%sContent-length: %d\r\n", buf, filesize);
+	sprintf(buf, "%sContent-type: %s\r\n\r\n", buf, filetype);
+	/* double empty line between response line and response header as per protocol */
+	write_n_bytes(fd, buf, strlen(buf));
+	printf("Response headers:\n");
+	printf("%s", buf);
 
-
-
-
+	/* Send response body to client by copying the file contents to fd */
+	src = fopen(filename, "r");	/* open file in read only mode */
+	if(src != NULL) {
+		bytesread = fread(buf,1,MAXBUF,src);
+		buf[bytesread] = '\0';	/* fread doesn't null terminate */
+		p_src = buf;			/* pointer to the beginning of the buffer */
+		write_n_bytes(fd, p_src, filesize);	/*write filesize-many bites to fd */
+		fclose(src);			/* close file */
+	}
+	else {
+		raise_http_err(fd, filename, "404", "Not found", "File not found or couldn't be opened.");
+	}
+}
