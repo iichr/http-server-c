@@ -24,7 +24,9 @@ ssize_t read_n_bytes(int fd, void *buf, size_t n) {
 	/* while bytes to be read */
 	while(bytesleft > 0) {
 		bytesread = read(fd, p_buf, bytesleft);
-		// do error handling below: if(...)
+		if (errno == EINTR) {
+			bytesread = 0;
+		}
 		if(bytesread < 0) {
 			error("Error in read_n_bytes");
 		}
@@ -45,23 +47,34 @@ ssize_t read_n_bytes(int fd, void *buf, size_t n) {
  * @param  buf a pointer to a buffer
  * @param  n   bytes to write
  */
-void write_n_bytes(int fd, void *buf, size_t n) {
+ssize_t write_n_bytes_a(int fd, void *buf, size_t n) {
 	size_t bytesleft = n;
 	ssize_t byteswritten;
 	char *p_buf = buf;
 
 	while (bytesleft > 0) {
-		byteswritten = write(fd, p_buf, bytesleft);
-		if(byteswritten <= 0) {
-			error("Error in read_n_bytes");
+		if((byteswritten = write(fd, p_buf, bytesleft))<=0) {
+			if (errno == EINTR) {
+				byteswritten = 0;
+			}
+			else {
+				return -1;
+			}
 		}
-	bytesleft = bytesleft - byteswritten;
-	p_buf = p_buf + byteswritten;
+		bytesleft = bytesleft - byteswritten;
+		p_buf = p_buf + byteswritten;
 	}
-	if(n != byteswritten) {
-		error("Error in read_n_bytes");
-	}
+	return n;
 }
+		
+// WRITE WRAPPER
+void write_n_bytes(int fd, void *buf, size_t n) 
+{
+    write_n_bytes_a(fd, buf, n);
+    if (write_n_bytes_a(fd, buf, n) != n) {
+      error("Rio_writen error");
+    }
+}		
 
 
 // adapted from Bryant,R. and O'Hallaron, D. Computer Systems A Programmers Perspective 3rd Edition
@@ -97,7 +110,7 @@ void init_internalbuf(fd_internalbuf *rp, int fd) {
  * @param  n   [description]
  * @return     [description]
  */
-static ssize_t readb(fd_internalbuf *rp, char *buf, size_t n) {
+ssize_t readb(fd_internalbuf *rp, char *buf, size_t n) {
 	int count = n;
 
 	/* if buffer is empty */
@@ -105,6 +118,9 @@ static ssize_t readb(fd_internalbuf *rp, char *buf, size_t n) {
 		rp->unread = read(rp->fd, rp->ibuf, 
 			   sizeof(rp->ibuf));
 		if (rp->unread < 0) {
+			if(errno != EINTR) {
+				return -1;
+			}
 		}
 		else if (rp->unread == 0)  /* EOF */
 			return 0;
@@ -343,3 +359,4 @@ void serve_static(int fd, char *filename, int filesize) {
 		raise_http_err(fd, filename, "404", "Not found", "File not found or couldn't be opened.");
 	}
 }
+
