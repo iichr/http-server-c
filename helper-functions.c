@@ -70,10 +70,10 @@ ssize_t write_n_bytes_a(int fd, void *buf, size_t n) {
 // WRITE WRAPPER
 void write_n_bytes(int fd, void *buf, size_t n) 
 {
-    write_n_bytes_a(fd, buf, n);
-    if (write_n_bytes_a(fd, buf, n) != n) {
-      error("Rio_writen error");
-    }
+	write_n_bytes_a(fd, buf, n);
+	if (write_n_bytes_a(fd, buf, n) != n) {
+	  error("Rio_writen error");
+	}
 }		
 
 
@@ -153,29 +153,62 @@ ssize_t readb(fd_internalbuf *rp, char *buf, size_t n) {
  * @param  maxlen how many bytes is the maximum limit to read from a line
  * @return        number of bytes read
  */
-ssize_t readline(fd_internalbuf *rp, void *buf, size_t maxlen) {
-	int n;			/* number of bytes read in total */
-	int bytesread;	/* bytes read thus far */
-	char c;			/* keeps track of current buffer pointer */
-	char *bufp = buf;
+// ssize_t readline(fd_internalbuf *rp, void *buf, size_t maxlen) {
+// 	int n;			/* number of bytes read in total */
+// 	int bytesread;	/* bytes read thus far */
+// 	char c;			/* keeps track of current buffer pointer */
+// 	char *bufp = buf;
+
+// 	for (n = 1; n < maxlen; n++) { 
+// 		if ((bytesread = readb(rp, &c, 1)) == 1) {
+// 			*bufp++ = c; // move pointer by one character position
+// 			if (c == '\n')
+// 			break;
+// 		} else if (bytesread == 0) {
+// 			if (n == 1)
+// 				return 0; /* EOF, no data read */
+// 			else
+// 				break;    /* EOF, some data was read */
+// 		} else
+// 			error("Error in readline");
+// 			return -1;    /* error */
+// 	}
+// 	*bufp = 0;
+// 	return n;
+// }
+
+ssize_t readline_a(fd_internalbuf *rp, void *usrbuf, size_t maxlen) 
+{
+	int n, rc;
+	char c, *bufp = usrbuf;
 
 	for (n = 1; n < maxlen; n++) { 
-		if ((bytesread = readb(rp, &c, 1)) == 1) {
-			*bufp++ = c; // move pointer by one character position
-			if (c == '\n')
-			break;
-		} else if (bytesread == 0) {
-			if (n == 1)
-				return 0; /* EOF, no data read */
-			else
-				break;    /* EOF, some data was read */
-		} else
-			error("Error in readline");
-			return -1;    /* error */
+	if ((rc = readb(rp, &c, 1)) == 1) {
+		*bufp++ = c;
+		if (c == '\n')
+		break;
+	} else if (rc == 0) {
+		if (n == 1)
+		return 0; /* EOF, no data read */
+		else
+		break;    /* EOF, some data was read */
+	} else
+		return -1;	  /* error */
 	}
 	*bufp = 0;
 	return n;
 }
+
+ssize_t readline(fd_internalbuf *rp, void *usrbuf, size_t maxlen) 
+{
+    ssize_t rc;
+
+    if ((rc = readline_a(rp, usrbuf, maxlen)) < 0)
+	error("Readline error");
+    return rc;
+} 
+
+
 
 
 /**
@@ -359,4 +392,25 @@ void serve_static(int fd, char *filename, int filesize) {
 		raise_http_err(fd, filename, "404", "Not found", "File not found or couldn't be opened.");
 	}
 }
+
+
+// void serve_static(int fd, char *filename, int filesize) {
+// 	int srcfd;
+// 	char *srcp, filetype[MAXLINE], buf[MAXBUF];
+// 	getfiletype(filename, filetype);
+// 	sprintf(buf, "HTTP/1.1 200 OK\r\n");
+// 	sprintf(buf, "%sServer: CSERVER\r\n", buf);
+// 	sprintf(buf, "%sConnection: close\r\n", buf);
+// 	sprintf(buf, "%sContent-length: %d\r\n", buf, filesize);
+// 	sprintf(buf, "%sContent-type: %s\r\n\r\n", buf, filetype);
+// 	/* double empty line between response line and response header as per protocol */
+// 	write_n_bytes(fd, buf, strlen(buf));
+	
+// 	srcfd = open(filename, O_RDONLY, 0);
+// 	srcp = mmap(0, filesize, PROT_READ, MAP_PRIVATE, srcfd, 0);
+// 	close(srcfd);
+// 	write_n_bytes(fd, srcp, filesize);
+// 	munmap(srcp, filesize);
+// }
+
 

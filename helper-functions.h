@@ -5,6 +5,9 @@
 #include <errno.h>
 #include <strings.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <sys/types.h>
 
 /* Constants */
 #define BUFSIZE 4096
@@ -28,7 +31,10 @@ void write_n_bytes(int fd, void *buf, size_t n);	/* write n bytes to file descri
 void init_internalbuf(fd_internalbuf *rp, int fd);	/* associate file descriptor with an internal buffer struct */
 
 ssize_t readb(fd_internalbuf *rp, char *buf, size_t n);	/* buffered version of UNIX read() */
+
+ssize_t readline_a(fd_internalbuf *rp, void *usrbuf, size_t maxlen); 
 ssize_t readline(fd_internalbuf *rp, void *buf, size_t maxlen); /* read a text line from a file descriptor struct */
+
 ssize_t read_n_bytes_buffered(fd_internalbuf *rp, void *buf, size_t n);	/* read n bytes to a buffer from a file descriptor struct */
 
 /* HTTP Handling  */
