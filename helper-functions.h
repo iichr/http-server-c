@@ -14,6 +14,7 @@
 #define MAXLINE 4096
 #define MAXBUF  4096
 
+
 /* file descriptor with an internal buffer */
 typedef struct {
 	int fd;		/* descriptor for this internal buf */

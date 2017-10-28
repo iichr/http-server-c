@@ -38,6 +38,36 @@ struct {
 	{0,0} };
 
 
+
+/**
+ * Return a given error message with an error code to the client
+ * @param fd         the file descriptor	
+ * @param err        name of object that caused the error
+ * @param error_code HTTP error code e.g 404
+ * @param shortmsg   HTTP error code message e.g Forbidden
+ * @param longmsg    A more thorough explanation
+ */
+void raise_http_err(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg) {
+	char buf[buffer_size];	/* store response header */
+	char body[buffer_size];	/* store the response body */
+
+	sprintf(body, "<html><title>Error</title>");
+    sprintf(body, "%s<body>\r\n", body);
+    sprintf(body, "%s%s: %s\r\n", body, errnum, shortmsg);
+    sprintf(body, "%s<p>%s: %s\r\n", body, longmsg, cause);
+    sprintf(body, "%s<hr><em>CSSERVER Web server</em>\r\n", body);
+
+    // Print the HTTP response 
+    sprintf(buf, "HTTP/1.1 %s %s\r\n", errnum, shortmsg);
+    write(fd, buf, strlen(buf));
+    sprintf(buf, "Content-type: text/html\r\n");
+    write(fd, buf, strlen(buf));
+    sprintf(buf, "Content-length: %d\r\n\r\n", (int)strlen(body));
+    write(fd, buf, strlen(buf));
+    write(fd, body, strlen(body));
+}
+
+
 int
 service_client_socket (const int s, const char *const tag) {
 	long i, len;
@@ -100,7 +130,8 @@ service_client_socket (const int s, const char *const tag) {
 		}
 
 		if(file_type_mime == 0) {
-			write(s, "HTTP/1.1 403 Forbidden\nContent-Length: 185\nConnection: close\nContent-Type: text/html\n\n<html><head>\n<title>403 Forbidden</title>\n</head><body>\n<h1>Forbidden</h1>\nThe requested URL, file type or operation is not allowed on this simple static file webserver.\n</body></html>\n",271);
+			//write(s, "HTTP/1.1 403 Forbidden\nContent-Length: 185\nConnection: close\nContent-Type: text/html\n\n<html><head>\n<title>403 Forbidden</title>\n</head><body>\n<h1>Forbidden</h1>\nThe requested URL, file type or operation is not allowed on this simple static file webserver.\n</body></html>\n",271);
+			raise_http_err(s,file_type_mime,"403", "Forbidden", "Requested file type can't be displayed on this server.");
 		}
 
 
@@ -125,8 +156,6 @@ service_client_socket (const int s, const char *const tag) {
 		}
 		close(fd);
 		
-
-
 
 		/* special case for tidy printing: if the last two characters are
 		\r\n or the last character is \n, zap them so that the newline

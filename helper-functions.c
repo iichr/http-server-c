@@ -208,9 +208,6 @@ ssize_t readline(fd_internalbuf *rp, void *usrbuf, size_t maxlen)
     return rc;
 } 
 
-
-
-
 /**
  * Read up to n bytes from file rp to the memory location buf
  * - adapted from Bryant,R. and O'Hallaron, D.
@@ -283,12 +280,18 @@ void read_request_headers(fd_internalbuf *rp) {
  * @param filename the relative pathname of the resource at the URI
  */
 void parse_uri(char *uri, char *filename) {
+	char *dir;
+	dir = getenv("PWD");
+	char path_buffer[300];
+
 	int urilen = strlen(uri);
-	strcpy(filename, ".");
-	strcat(filename, uri);
 	// if URI ends with / then redirect to homepage
 	if(uri[urilen - 1] == '/') {
-		strcat(filename, "index.hmtl");
+		sprintf(path_buffer, "%s/index.html", dir);
+		strcat(filename, path_buffer);
+	} else {
+		sprintf(path_buffer, "%s%s", dir, uri);
+		strcat(filename, path_buffer);
 	}
 	return;
 }
@@ -322,36 +325,33 @@ void getfiletype(char *filename, char *filetype) {
 
 /**
  * Return a given error message with an error code to the client
- * @param fd         the file descriptor	
- * @param err        name of object that caused the error
- * @param error_code HTTP error code e.g 404
- * @param shortmsg   HTTP error code message e.g Forbidden
- * @param longmsg    A more thorough explanation
+ * @param fd         	the file descriptor	
+ * @param err 	name of object that caused the error
+ * @param error_code	HTTP error code e.g 404
+ * @param error_title	HTTP error code message e.g Forbidden
+ * @param error_descr	A more thorough explanation
  */
-void raise_http_err(int fd, char *err, char *error_code, char *shortmsg, char *longmsg) {
-	char buf[MAXLINE];	/* store response header */
-	char body[MAXBUF];	/* store the response body */
+void raise_http_err(int fd, char *err, char *error_code, char *error_title, char *error_descr) {
+	char buf[BUFSIZE];	/* store response header */
+	char body[BUFSIZE];	/* store the response body */
 
-	/* Print the HTTP response */
-	sprintf(buf, "HTTP/1.1 %s %s\r\n", error_code, shortmsg);
-	write_n_bytes(fd, buf, strlen(buf));
-	
-	sprintf(buf, "Server: CSERVER\r\n");
-	write_n_bytes(fd, buf, strlen(buf));
-	
-	sprintf(buf, "Content-type: text/html\r\n");
-	write_n_bytes(fd, buf, strlen(buf));
-	
-	sprintf(buf, "Content-length: %d\r\n\r\n", (int)strlen(body));
-	write_n_bytes(fd, buf, strlen(buf));
+	sprintf(body, "<html><title>%s Error</title>", error_code);
+    sprintf(body, "%s<body> <h1>\r\n", body);
+    sprintf(body, "%s%s: %s</h1><h3>\r\n", body, error_code, error_title);
+    sprintf(body, "%s %s: <em> %s <em> </h3>\r\n", body, error_descr, err);
 
-	/* Build the HTTP response body */
-	sprintf(body, "<html><title>Error</title>");
-	sprintf(body, "%s <body>\r\n", body);
-	sprintf(body, "%s %s: %s\r\n", body, error_code, shortmsg);
-	sprintf(body, "%s<p>%s: %s\r\n", body, longmsg, err);
-	/* print the response body */
-	write_n_bytes(fd, body, strlen(body));
+    // Print the HTTP response 
+    sprintf(buf, "HTTP/1.1 %s %s\r\n", error_code, error_title);
+    write(fd, buf, strlen(buf));
+    
+    sprintf(buf, "%sConnection: close\r\n", buf);
+	write(fd, buf, strlen(buf));
+
+    sprintf(buf, "Content-type: text/html\r\n");
+    write(fd, buf, strlen(buf));
+    sprintf(buf, "Content-length: %d\r\n\r\n", (int)strlen(body));
+    write(fd, buf, strlen(buf));
+    write(fd, body, strlen(body));
 }
 
 
@@ -364,53 +364,41 @@ void raise_http_err(int fd, char *err, char *error_code, char *shortmsg, char *l
  */
 void serve_static(int fd, char *filename, int filesize) {
 	FILE *src;
-	char *p_src, filetype[MAXLINE], buf[MAXBUF];
+	//char *p_src;
+	char filetype[MAXLINE];
+	char buf[MAXBUF];
 	int bytesread;
  
-	/* Send response line and headers to client */
-	getfiletype(filename, filetype);	/* determine file type */
-	sprintf(buf, "HTTP/1.1 200 OK\r\n");
-	sprintf(buf, "%sServer: CSERVER\r\n", buf);
-	sprintf(buf, "%sConnection: close\r\n", buf);
-	sprintf(buf, "%sContent-length: %d\r\n", buf, filesize);
-	sprintf(buf, "%sContent-type: %s\r\n\r\n", buf, filetype);
-	/* double empty line between response line and response header as per protocol */
-	write_n_bytes(fd, buf, strlen(buf));
-	printf("Response headers:\n");
-	printf("%s", buf);
-
-	/* Send response body to client by copying the file contents to fd */
-	src = fopen(filename, "r");	/* open file in read only mode */
+ 	src = fopen(filename, "r");
 	if(src != NULL) {
-		bytesread = fread(buf,1,MAXBUF,src);
-		buf[bytesread] = '\0';	/* fread doesn't null terminate */
-		p_src = buf;			/* pointer to the beginning of the buffer */
-		write_n_bytes(fd, p_src, filesize);	/*write filesize-many bites to fd */
-		fclose(src);			/* close file */
-	}
-	else {
+	/* Send response line and headers to client */
+		getfiletype(filename, filetype);	/* determine file type */
+		sprintf(buf, "HTTP/1.1 200 OK\r\n");
+		sprintf(buf, "%sServer: CSERVER\r\n", buf);
+		sprintf(buf, "%sConnection: close\r\n", buf);
+		sprintf(buf, "%sContent-length: %d\r\n", buf, filesize);
+		sprintf(buf, "%sContent-type: %s\r\n\r\n", buf, filetype);
+		/* double empty line between response line and response header as per protocol */
+		write(fd, buf, strlen(buf));
+		printf("Response headers:\n");
+		printf("%s\n", buf);
+
+		while((bytesread = fread(buf,1,MAXBUF, src)) > 0) {
+			write(fd,buf,bytesread);
+		}
+		fclose(src);
+	} else {
+		sprintf(buf, "HTTP/1.1 404 Not found\r\n");
+		sprintf(buf, "%sServer: CSERVER\r\n", buf);
+		sprintf(buf, "%sConnection: close\r\n", buf);
+		sprintf(buf, "%sContent-length: %lu\r\n", buf, strlen(buf));
+		write(fd, buf, strlen(buf));
+		printf("Response headers:\n");
+		printf("%s\n", buf);
+
 		raise_http_err(fd, filename, "404", "Not found", "File not found or couldn't be opened.");
 	}
 }
 
-
-// void serve_static(int fd, char *filename, int filesize) {
-// 	int srcfd;
-// 	char *srcp, filetype[MAXLINE], buf[MAXBUF];
-// 	getfiletype(filename, filetype);
-// 	sprintf(buf, "HTTP/1.1 200 OK\r\n");
-// 	sprintf(buf, "%sServer: CSERVER\r\n", buf);
-// 	sprintf(buf, "%sConnection: close\r\n", buf);
-// 	sprintf(buf, "%sContent-length: %d\r\n", buf, filesize);
-// 	sprintf(buf, "%sContent-type: %s\r\n\r\n", buf, filetype);
-// 	/* double empty line between response line and response header as per protocol */
-// 	write_n_bytes(fd, buf, strlen(buf));
-	
-// 	srcfd = open(filename, O_RDONLY, 0);
-// 	srcp = mmap(0, filesize, PROT_READ, MAP_PRIVATE, srcfd, 0);
-// 	close(srcfd);
-// 	write_n_bytes(fd, srcp, filesize);
-// 	munmap(srcp, filesize);
-// }
 
 
