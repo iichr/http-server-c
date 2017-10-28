@@ -10,77 +10,6 @@ void error(char *msg) {
 }
 
 /**
- * Read n bytes using read(). Transferred directly between memory
- * and file, no buffer
- * @param  fd  a file descriptor
- * @param  buf a pointer to a buffer
- * @param  n   max size to read
- * @return     how many bytes were read
- */
-ssize_t read_n_bytes(int fd, void *buf, size_t n) {
-	size_t bytesleft = n;
-	ssize_t bytesread;
-	char *p_buf = buf;
-	/* while bytes to be read */
-	while(bytesleft > 0) {
-		bytesread = read(fd, p_buf, bytesleft);
-		if (errno == EINTR) {
-			bytesread = 0;
-		}
-		if(bytesread < 0) {
-			error("Error in read_n_bytes");
-		}
-		else if(bytesread == 0) {
-			break;
-		}
-		// update bytes left thus far and buffer pointer
-		bytesleft = bytesleft - bytesread;
-		p_buf = p_buf + bytesread; 
-	}
-	return n - bytesleft;
-}
-
-/**
- * Write n bytes using write(). Transferred directly between memory
- * and file, no buffer
- * @param  fd  a file descriptor
- * @param  buf a pointer to a buffer
- * @param  n   bytes to write
- */
-ssize_t write_n_bytes_a(int fd, void *buf, size_t n) {
-	size_t bytesleft = n;
-	ssize_t byteswritten;
-	char *p_buf = buf;
-
-	while (bytesleft > 0) {
-		if((byteswritten = write(fd, p_buf, bytesleft))<=0) {
-			if (errno == EINTR) {
-				byteswritten = 0;
-			}
-			else {
-				return -1;
-			}
-		}
-		bytesleft = bytesleft - byteswritten;
-		p_buf = p_buf + byteswritten;
-	}
-	return n;
-}
-		
-// WRITE WRAPPER
-void write_n_bytes(int fd, void *buf, size_t n) 
-{
-	write_n_bytes_a(fd, buf, n);
-	if (write_n_bytes_a(fd, buf, n) != n) {
-	  error("Rio_writen error");
-	}
-}		
-
-
-// adapted from Bryant,R. and O'Hallaron, D. Computer Systems A Programmers Perspective 3rd Edition
-// pp 898 - ...
-
-/**
  * Associate a file descriptor with a read buffer from the structure
  * @param rp the address of a structure with an internal buffer to be
  * mapped to a file descriptor 
@@ -138,10 +67,9 @@ ssize_t readb(fd_internalbuf *rp, char *buf, size_t n) {
 	return count;		/* number of bytes copied to supplied buffer */
 }
 
-
 /**
  * Reads the next text line from file rp (including the terminating newline character)
- * copies it to memory location buf, and terminates the text line with \0. 
+ * copies it to memory location usrbuf, and terminates the text line with \0. 
  * It reads at most maxlen-1 bytes, leaving room for the terminating NULL character. 
  * Text lines that exceed maxlen-1 bytes are truncated and terminated with a NULL character.
  *
@@ -149,34 +77,10 @@ ssize_t readb(fd_internalbuf *rp, char *buf, size_t n) {
  * - Computer Systems A Programmers Perspective 3rd Edition
  * 
  * @param  rp     file descriptor with buffer to read from
- * @param  buf    where the line will be stored
+ * @param  usrbuf where the line will be stored
  * @param  maxlen how many bytes is the maximum limit to read from a line
  * @return        number of bytes read
  */
-// ssize_t readline(fd_internalbuf *rp, void *buf, size_t maxlen) {
-// 	int n;			/* number of bytes read in total */
-// 	int bytesread;	/* bytes read thus far */
-// 	char c;			/* keeps track of current buffer pointer */
-// 	char *bufp = buf;
-
-// 	for (n = 1; n < maxlen; n++) { 
-// 		if ((bytesread = readb(rp, &c, 1)) == 1) {
-// 			*bufp++ = c; // move pointer by one character position
-// 			if (c == '\n')
-// 			break;
-// 		} else if (bytesread == 0) {
-// 			if (n == 1)
-// 				return 0; /* EOF, no data read */
-// 			else
-// 				break;    /* EOF, some data was read */
-// 		} else
-// 			error("Error in readline");
-// 			return -1;    /* error */
-// 	}
-// 	*bufp = 0;
-// 	return n;
-// }
-
 ssize_t readline_a(fd_internalbuf *rp, void *usrbuf, size_t maxlen) 
 {
 	int n, rc;
@@ -199,6 +103,12 @@ ssize_t readline_a(fd_internalbuf *rp, void *usrbuf, size_t maxlen)
 	return n;
 }
 
+/**
+ * Wrapper for readline_a.
+ * - adapted from Bryant,R. and O'Hallaron, D.
+ * - Computer Systems A Programmers Perspective 3rd Edition
+ */
+
 ssize_t readline(fd_internalbuf *rp, void *usrbuf, size_t maxlen) 
 {
     ssize_t rc;
@@ -209,41 +119,7 @@ ssize_t readline(fd_internalbuf *rp, void *usrbuf, size_t maxlen)
 } 
 
 /**
- * Read up to n bytes from file rp to the memory location buf
- * - adapted from Bryant,R. and O'Hallaron, D.
- * - Computer Systems A Programmers Perspective 3rd Edition
- * 
- * @param  rp  file descriptor with buffer to read from
- * @param  buf [description]
- * @param  n   [description]
- * @return     [description]
- */
-ssize_t read_n_bytes_buffered(fd_internalbuf *rp, void *buf, size_t n) {
-	size_t bytesleft = n;
-	ssize_t bytesread;
-	char *bufp = buf;
-	
-	while (bytesleft > 0) {
-		if ((bytesread = readb(rp, bufp, bytesleft)) < 0) {
-			if (errno == EINTR)     /* interrupted by sig handler return */
-				bytesread = 0;      /* call read() again */
-			else
-				error("Error in read_n_bytes_buffered");
-				return -1;          /* errno set by read() */ 
-		}
-		else if (bytesread == 0)
-			break;                  /* EOF */
-
-		// update bytes left thus far and buffer pointer
-		bytesleft = bytesleft - bytesread;
-		bufp = bufp + bytesread;
-	}
-	return n - bytesleft;       /* return >= 0 */
-}
-
-
-/**
- * HTTP HELPER FUNCTIONS
+ * HTTP HANDLING
  */
 
 // General approach:
@@ -259,12 +135,15 @@ ssize_t read_n_bytes_buffered(fd_internalbuf *rp, void *buf, size_t n) {
  */
 void read_request_headers(fd_internalbuf *rp) {
 	char buf[MAXLINE];
-	// first line
-	readline(rp, buf, MAXLINE);
-	printf("%s", buf);
-	// request headers: Host, Accept, Content-Length etc.
-	// a blank line separates them from the body
-	// protocol requires \r\n
+
+	readline(rp, buf, MAXLINE); /* first line of the request */
+	printf("%s", buf); /* print it */
+	/**
+	 * Keep reading until \r\n ecnountered
+	 * request headers: Host, Accept, Content-Length etc.
+	 * Separated from the the body by a blank line
+	 * Specs require \r\n
+	 */
 	while(strcmp(buf, "\r\n")) {
 		readline(rp, buf, MAXLINE);
 		printf("%s", buf);
@@ -273,19 +152,20 @@ void read_request_headers(fd_internalbuf *rp) {
 }
 
 /**
- * Convert a given URI into a relative pathname e.g ./index.html
+ * Convert a given URI into a pathname
  * Error handling e.g whether file exists or not is done separately.
  * 
  * @param uri      the full URI
- * @param filename the relative pathname of the resource at the URI
+ * @param filename the pathname to the resource at the URI
  */
 void parse_uri(char *uri, char *filename) {
 	char *dir;
+	/* get current working directory */
 	dir = getenv("PWD");
-	char path_buffer[300];
+	char path_buffer[300];	/* buffer to store the path. Prone to overflow!! */
 
 	int urilen = strlen(uri);
-	// if URI ends with / then redirect to homepage
+	/* if URI ends with / then redirect to the index page */
 	if(uri[urilen - 1] == '/') {
 		sprintf(path_buffer, "%s/index.html", dir);
 		strcat(filename, path_buffer);
@@ -308,16 +188,12 @@ void parse_uri(char *uri, char *filename) {
 void getfiletype(char *filename, char *filetype) {
 	if (strstr(filename, ".html"))
 		strcpy(filetype, "text/html");
-
 	else if (strstr(filename, ".jpeg"))
 		strcpy(filetype, "image/jpeg");
-
 	else if (strstr(filename, ".jpg"))
 		strcpy(filetype, "image/jpg");
-
 	else if (strstr(filename, ".pdf"))
 		strcpy(filetype, "application/pdf");
-
 	else
 		strcpy(filetype, "text/plain");
 }  
@@ -335,21 +211,22 @@ void raise_http_err(int fd, char *err, char *error_code, char *error_title, char
 	char buf[BUFSIZE];	/* store response header */
 	char body[BUFSIZE];	/* store the response body */
 
+	/* RESPONSE BODY - to be diplsayed in the browser */
 	sprintf(body, "<html><title>%s Error</title>", error_code);
     sprintf(body, "%s<body> <h1>\r\n", body);
     sprintf(body, "%s%s: %s</h1><h3>\r\n", body, error_code, error_title);
     sprintf(body, "%s %s: <em> %s <em> </h3>\r\n", body, error_descr, err);
 
-    // Print the HTTP response 
+    /* Print the HTTP response */
     sprintf(buf, "HTTP/1.1 %s %s\r\n", error_code, error_title);
     write(fd, buf, strlen(buf));
-    
     sprintf(buf, "%sConnection: close\r\n", buf);
 	write(fd, buf, strlen(buf));
-
     sprintf(buf, "Content-type: text/html\r\n");
     write(fd, buf, strlen(buf));
     sprintf(buf, "Content-length: %d\r\n\r\n", (int)strlen(body));
+    
+    /* Write the responses */
     write(fd, buf, strlen(buf));
     write(fd, body, strlen(body));
 }
@@ -362,32 +239,32 @@ void raise_http_err(int fd, char *err, char *error_code, char *error_title, char
  * @param filename 
  * @param filesize 
  */
-void serve_static(int fd, char *filename, int filesize) {
+void serve_http(int fd, char *filename, int filesize) {
 	FILE *src;
-	//char *p_src;
 	char filetype[MAXLINE];
 	char buf[MAXBUF];
 	int bytesread;
  
  	src = fopen(filename, "r");
 	if(src != NULL) {
-	/* Send response line and headers to client */
+		/* Print the response incl headers */
 		getfiletype(filename, filetype);	/* determine file type */
 		sprintf(buf, "HTTP/1.1 200 OK\r\n");
 		sprintf(buf, "%sServer: CSERVER\r\n", buf);
 		sprintf(buf, "%sConnection: close\r\n", buf);
 		sprintf(buf, "%sContent-length: %d\r\n", buf, filesize);
 		sprintf(buf, "%sContent-type: %s\r\n\r\n", buf, filetype);
-		/* double empty line between response line and response header as per protocol */
 		write(fd, buf, strlen(buf));
 		printf("Response headers:\n");
 		printf("%s\n", buf);
 
+		/* HTTP response body - display file contents in browser */
 		while((bytesread = fread(buf,1,MAXBUF, src)) > 0) {
 			write(fd,buf,bytesread);
 		}
 		fclose(src);
 	} else {
+		/* FILE NOT FOUND */
 		sprintf(buf, "HTTP/1.1 404 Not found\r\n");
 		sprintf(buf, "%sServer: CSERVER\r\n", buf);
 		sprintf(buf, "%sConnection: close\r\n", buf);
@@ -395,10 +272,8 @@ void serve_static(int fd, char *filename, int filesize) {
 		write(fd, buf, strlen(buf));
 		printf("Response headers:\n");
 		printf("%s\n", buf);
-
+		/* Raise HTTP 404 error */
 		raise_http_err(fd, filename, "404", "Not found", "File not found or couldn't be opened.");
 	}
 }
-
-
 

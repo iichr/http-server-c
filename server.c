@@ -13,12 +13,13 @@
 #include <assert.h>
 #include <sys/stat.h>
 
-static void *connection_handler(void *);
-pthread_mutex_t lock;
+static void *connection_handler(void *); /* the function that handles a connection */
+pthread_mutex_t lock; /* a lock for accesing files */
 char *myname = "unknown";
 
+
 int main(int argc, char *argv[]) {
-	int port, sock;
+	int port, sock, result;
 	char *endp;
 	struct sockaddr_in6 my_address;
 
@@ -44,7 +45,6 @@ int main(int argc, char *argv[]) {
 		exit (1);
 	}
 
-	// s = get listen socket(p);
 	fprintf (stderr, "binding  to port %d\n", port);
 
 	memset (&my_address, '\0', sizeof (my_address));
@@ -75,50 +75,80 @@ int main(int argc, char *argv[]) {
 
 	// now we have s from above
 	int client;
-	int *new_sock;
 	struct sockaddr_in6 their_address;
 	socklen_t their_address_size = sizeof (their_address);
 	
-	while ((client = accept(sock, (struct sockaddr *)&their_address, &their_address_size)) > 0) {
-		
+	while(1) {
 		pthread_t t;
-		
-		new_sock = malloc(sizeof(*new_sock));
-		if(!new_sock) {
-			fprintf (stderr, "Error in malloc.\n");
-			exit(1);
+		int *newsockfd; /* allocate memory for each instance to avoid race condition */
+		pthread_attr_t pthread_attr; /* attributes for newly created thread */
+
+		newsockfd  = malloc (sizeof (int));
+		if (!newsockfd) {
+			error ("Memory allocation failed!\n");
+			exit (1);
 		}
-		*new_sock = client;
-		if ((pthread_create (&t, 0, connection_handler, (void *)new_sock)) != 0) {
-			fprintf (stderr, "Thread creation error.\n");
+
+		/* waiting for connections and thread creation */
+		*newsockfd = accept( sock, 
+			  (struct sockaddr *) &their_address, 
+			  &their_address_size);
+		
+		if (*newsockfd < 0) {
+			error ("ERROR on accept");
+		}
+
+		/* create separate thread for processing */
+		if (pthread_attr_init (&pthread_attr)) {
+			error ("Creating initial thread attributes failed!\n");
+			exit (1);
+		}
+
+		if (pthread_attr_setdetachstate (&pthread_attr, PTHREAD_CREATE_DETACHED)) {
+			error ("Setting thread attributes failed!\n");
+			exit (1);
+		}
+	 
+		result = pthread_create (&t, &pthread_attr, connection_handler, (void *) newsockfd);
+		
+		if (result != 0) {
+			error ("Thread creation failed!\n");
+			exit (1);
 		}
 	}
 
 	if(client < 0) {
-		fprintf (stderr, "Accept error.\n");
+		error ("Accept error.\n");
 		return -1;
 	}
+	close(sock);
 	return 0;
 }
 
-// handles one HTTP transaction, including an HTTP response containing the contents of a local file.
-static void *connection_handler(void *sock) {
+
+/**
+ * Handles one HTTP transaction, including an HTTP response containing the contents of 
+ * a local file.
+ * @param  args socket
+ */
+static void *connection_handler(void *args) {
 	
-	int fd = *(int*)sock;
+	int *fd = (int*)args;
 	
-	// for the file info
+	/* for extracting file info */
 	struct stat file_info;	/* the struct where stat() will store file information */
 
-	char buf[MAXLINE];
-	char method[MAXLINE]; // wasteful?
-	char uri[MAXLINE];
-	char version[MAXLINE]; // perhaps a bit wasteful?
-	char filename[MAXLINE];
+	char buf[MAXLINE];	/* buffer */
+	char method[MAXSMALL];	/* for storing the method - GET or POST */
+	char uri[MAXLINE];	/* for storing the URI */
+	char version[MAXSMALL]; /* for storing the version - HTTP 1.x/ */
+	char filename[MAXLINE];	/* for storing the filename */
 	fd_internalbuf fdbuf;	/* internal buffer */
 
-	init_internalbuf(&fdbuf, fd);	/* assign an internal buffer to fd by using struct */
+	init_internalbuf(&fdbuf, *fd);	/* assign an internal buffer to fd by using struct */
+	
 	if(!readline(&fdbuf, buf, MAXLINE)) {	/* read the first request line */
-		exit(1);
+		error("Error in readline");
 	}
 	printf("%s", buf);	/* print first line */
 	/* Obtain the HTTP request method, uri and version */
@@ -126,7 +156,7 @@ static void *connection_handler(void *sock) {
 
 	/* check if method is GET/POST, only supported ones so far */
 	if (strcasecmp(method, "GET") && strcasecmp(method, "POST") ) { /* returns 0 if they are one of GET or POST */
-		raise_http_err(fd, method, "501", "Not implemented", "This method is not yet supported.");
+		raise_http_err(*fd, method, "501", "Not implemented", "This method is not yet supported");
 	}
 
 	read_request_headers(&fdbuf);	/*read request headers from internal buffer */
@@ -134,17 +164,18 @@ static void *connection_handler(void *sock) {
 
 	/* Obtain file information using the stat function annd store in file_info */
 	if(stat(filename, &file_info) < 0) { /* check if successful i.e returns 0 */
-		raise_http_err(fd, filename, "404", "Not found", "The file requested was not found.");
+		raise_http_err(*fd, filename, "404", "Not found", "File not found or couldn't be opened");
 	}
+
 	/* Get file size from the stat struct */
 	int filesize = file_info.st_size;
 
-	// check file permissions perhaps
-	
 	pthread_mutex_lock(&lock);
-	// serve content
-	serve_static(fd, filename, filesize);
+	serve_http(*fd, filename, filesize);	/* serve file requested */
 	pthread_mutex_unlock(&lock);
-	pthread_exit (0);
+	
+	close (*fd); /* important to avoid memory leak */  
+	free (fd);
+	pthread_exit (NULL);
 }
 
