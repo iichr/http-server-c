@@ -122,13 +122,6 @@ ssize_t readline(fd_internalbuf *rp, void *usrbuf, size_t maxlen)
  * HTTP HANDLING
  */
 
-// General approach:
-// If formatted output needed -> sprintf
-// send the formatted string to the socket using write_n_bytes
-// 
-// If formatted input needed -> readline to read an entire text line
-// then use sscanf to extract different fields from the text line.
-
 /**
  * Read request headers and print them
  * @param rp a struct with an internal buffer to read from
