@@ -166,7 +166,7 @@ void parse_uri(char *uri, char *filename) {
 		sprintf(path_buffer, "%s%s", dir, uri);
 		strcat(filename, path_buffer);
 	}
-	return;
+    return;
 }
 
 
@@ -189,7 +189,7 @@ void getfiletype(char *filename, char *filetype) {
 		strcpy(filetype, "application/pdf");
 	else
 		strcpy(filetype, "text/plain");
-}  
+} 
 
 
 /**

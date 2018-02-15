@@ -12,6 +12,7 @@
 #include <ctype.h>
 #include <assert.h>
 #include <sys/stat.h>
+#include <signal.h>
 
 static void *connection_handler(void *); /* the function that handles a connection */
 pthread_mutex_t lock; /* a lock for accesing files */
@@ -19,6 +20,9 @@ char *myname = "unknown";
 
 
 int main(int argc, char *argv[]) {
+
+	signal(SIGPIPE, SIG_IGN);
+	
 	int port, sock, result;
 	char *endp;
 	struct sockaddr_in6 my_address;

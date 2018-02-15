@@ -12,7 +12,7 @@ endif
 all: server
 
 server: helper-functions.o server.o
-	$(CC) $(CFLAGS) server.o helper-functions.o -o server
+	$(CC) $(CFLAGS) -lpthread server.o helper-functions.o -o server
 
 helper-functions.o: helper-functions.c
 	$(CC) $(CFLAGS) -c helper-functions.c
